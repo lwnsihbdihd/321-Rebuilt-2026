@@ -38,17 +38,23 @@ import frc.robot.util.TunableConstant;
 
 public class Hood extends SubsystemBase {
 
+  // Creates objects of the TalonFX, DigitalInput, and CANdi classes.
   @Logged private TalonFX hoodMotor = new TalonFX(HoodConstants.kHoodMotorId);
   @Logged private DigitalInput hoodLimitSwitch = new DigitalInput(HoodConstants.kLimitSwitchID);
   @Logged private CANdi magneticLimitSwitch = new CANdi(0);
+
+  // Makes a targetAngle variable set to kStartingAngle to make it more easily accessible.
   private Angle targetAngle = HoodConstants.kStartingAngle;
 
+  // Makes a new PIDController object.
   public PIDController pidController = new PIDController(0, 0, 0);
 
   public ArmFeedforward armFeedforward = new ArmFeedforward(0, 0, 0);
 
   public Hood() {
     configureMotors();
+
+    // Sets the values of the hood PID.
     setHoodPID(HoodConstants.kP, HoodConstants.kD, HoodConstants.kG);
     magneticLimitSwitch.getConfigurator().apply(candiConfigs);
   }
@@ -57,6 +63,7 @@ public class Hood extends SubsystemBase {
 
     TalonFXConfiguration hoodMotorConfigs =
         new TalonFXConfiguration()
+          // Sets current limits to protect hardware.
             .withCurrentLimits(
                 new CurrentLimitsConfigs()
                     .withStatorCurrentLimit(HoodConstants.kHoodStatorCurrentLimit)
@@ -81,68 +88,82 @@ public class Hood extends SubsystemBase {
             .withFeedback(
                 new FeedbackConfigs().withSensorToMechanismRatio(HoodConstants.kHoodGearRatio));
 
+    // Applies the motor configs defined above.
     hoodMotor.getConfigurator().apply(hoodMotorConfigs);
   }
 
+  // Sets specific CANdi configs.
   public CANdiConfiguration candiConfigs =
       new CANdiConfiguration()
           .withDigitalInputs(
               new DigitalInputsConfigs().withS1CloseState(S1CloseStateValue.CloseWhenLow));
 
+  // Method to easily change the hood PID values.
   public void setHoodPID(double kP, double kD, double kG) {
     pidController.setP(kP);
     pidController.setD(kD);
     armFeedforward.setKg(kG);
   }
 
+  // Method to easily change the target angle by setting the targetAngle variable to an angle set in the parameters.
   public void setTargetAngle(Angle angle) {
     this.targetAngle = angle;
   }
 
+  // Method to move the motor to a certain angle.
   public void goToAngle(Angle angle) {
     hoodMotor.setVoltage(
         pidController.calculate(getAngle().in(Degrees), angle.in(Degrees))
             + armFeedforward.calculate(angle.in(Degrees), 0));
   }
 
+  // Method to calculate the angle the motor needs to get to to score in the hub.
   public Angle getScoreAngle(Distance hubDistance) {
     double pitch = 0;
     pitch = -37.69619 + 9.35374 * Math.log(hubDistance.in(Inches));
     return Degrees.of(pitch);
   }
 
+  // Method that returns the current angle of the motor.
   @Logged(name = "hoodPitch")
   public Angle getAngle() {
     Angle angle = hoodMotor.getPosition().getValue();
     return angle;
   }
 
+  // Method that returns the angular velocity of the motor.
   @Logged(name = "hoodVelocity")
   public AngularVelocity getVelocity() {
     return hoodMotor.getVelocity().getValue();
   }
 
+  // Method that checks if homed velocity is within a set tolerance value.
   public boolean isHomedVelocity() {
     return Math.abs(getVelocity().in(RPM) - HoodConstants.kHomingVelocityFloor.in(RPM))
         <= HoodConstants.kHomingVelocityTolerance;
   }
 
+  // Method that checks if homed current is above or equal to a set ceiling value for the current.
   public boolean isHomedCurrent() {
     return getCurrent().in(Amps) >= HoodConstants.kCurrentCeiling.in(Amps);
   }
 
+  // Method that checks if S1 input matches the configured S1 closed state.
   public boolean atHomedPosition() {
     return magneticLimitSwitch.getS1Closed(true).getValue();
   }
 
+  // Method that zeros the encoder by setting the position of the motor to specific value.
   public void zeroEncoder() {
     hoodMotor.setPosition(HoodConstants.kZeroPosition);
   }
 
+  // Method to run volts through the motor.
   public void runVolts(Voltage volts) {
     hoodMotor.setVoltage(volts.in(Volts));
   }
 
+  // Method to check if motor is at the target angle.
   @Logged(name = "hoodAtTargetAngle")
   public boolean atTargetAngle() {
     boolean atTargetAngle =
@@ -151,6 +172,7 @@ public class Hood extends SubsystemBase {
     return atTargetAngle;
   }
 
+  // Method that checks the current angle of the motor.
   public boolean atAngle(Angle angle) {
     boolean atAngle =
         Math.abs(getAngle().in(Degrees) - angle.in(Degrees))
@@ -158,6 +180,7 @@ public class Hood extends SubsystemBase {
     return atAngle;
   }
 
+  // Method to set the hood PID and move the motor to the target angle.
   public void tune(double kP, double kD, double kG, double targetAngle) {
     setHoodPID(kP, kD, kG);
     goToAngle(Degrees.of(targetAngle));
@@ -171,16 +194,19 @@ public class Hood extends SubsystemBase {
         .andThen(() -> zeroEncoder());
   }
 
+  // Method that returns the target angle.
   @Logged(name = "hoodTargetAngle")
   public Angle getTargetAngle() {
     return this.targetAngle;
   }
 
+  // Method to get the current voltage of the motor.
   @Logged(name = "hoodVoltage")
   public Voltage getVoltage() {
     return hoodMotor.getMotorVoltage().getValue();
   }
 
+  // Method to get the current current of the motor.
   @Logged(name = "hoodCurrent")
   public Current getCurrent() {
     return hoodMotor.getStatorCurrent().getValue();
@@ -188,6 +214,7 @@ public class Hood extends SubsystemBase {
 
   @Override
   public void periodic() {
+    // Puts the hood angle, voltage, and if it is at homed position on SmartDashboard, allowing the values to be viewed live as it changes.
     SmartDashboard.putNumber("Hood Angle", hoodMotor.getPosition().getValue().in(Degrees));
     SmartDashboard.putBoolean("Hood Is At Homed Position", atHomedPosition());
     SmartDashboard.putNumber("Hood Voltage", getVoltage().in(Volts));
